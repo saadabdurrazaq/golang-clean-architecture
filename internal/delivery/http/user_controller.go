@@ -1,11 +1,13 @@
 package http
 
 import (
-	"github.com/gofiber/fiber/v2"
-	"github.com/sirupsen/logrus"
 	"golang-clean-architecture/internal/delivery/http/middleware"
 	"golang-clean-architecture/internal/model"
 	"golang-clean-architecture/internal/usecase"
+	"math"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/sirupsen/logrus"
 )
 
 type UserController struct {
@@ -18,6 +20,35 @@ func NewUserController(useCase *usecase.UserUseCase, logger *logrus.Logger) *Use
 		Log:     logger,
 		UseCase: useCase,
 	}
+}
+
+func (c *UserController) List(ctx *fiber.Ctx) error {
+	// auth := middleware.GetUser(ctx)
+
+	request := &model.SearchUserRequest{
+		ID:   ctx.Query("id", ""),
+		Name: ctx.Query("name", ""),
+		Page: ctx.QueryInt("page", 1),
+		Size: ctx.QueryInt("size", 10),
+	}
+
+	responses, total, err := c.UseCase.Search(ctx.UserContext(), request)
+	if err != nil {
+		c.Log.WithError(err).Error("error searching user")
+		return err
+	}
+
+	paging := &model.PageMetadata{
+		Page:      request.Page,
+		Size:      request.Size,
+		TotalItem: total,
+		TotalPage: int64(math.Ceil(float64(total) / float64(request.Size))),
+	}
+
+	return ctx.JSON(model.WebResponse[[]model.UserWithContactResponse]{
+		Data:   responses,
+		Paging: paging,
+	})
 }
 
 func (c *UserController) Register(ctx *fiber.Ctx) error {
