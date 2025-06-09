@@ -1,8 +1,9 @@
 package route
 
 import (
-	"github.com/gofiber/fiber/v2"
 	"golang-clean-architecture/internal/delivery/http"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 type RouteConfig struct {
@@ -28,6 +29,7 @@ func (c *RouteConfig) SetupAuthRoute() {
 	c.App.Delete("/api/users", c.UserController.Logout)
 	c.App.Patch("/api/users/_current", c.UserController.Update)
 	c.App.Get("/api/users/_current", c.UserController.Current)
+	c.App.Get("/api/users/index", c.UserController.List)
 
 	c.App.Get("/api/contacts", c.ContactController.List)
 	c.App.Post("/api/contacts", c.ContactController.Create)

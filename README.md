@@ -72,6 +72,10 @@ migrate -database "mysql://root:root@tcp(localhost:3306)/golang_clean_architectu
 ### Run Docker
 
 ```bash
+- Open docker desktop
+- cd <your go directory>
+- then execute command below
+
 docker-compose down
 docker-compose up -d
 
@@ -97,3 +101,16 @@ go run cmd/web/main.go
 go run cmd/worker/main.go
 
 ```
+
+### Open phpmyadmin
+
+- Go to http://localhost:8080/
+- username: root
+- password: root
+
+### Token Usage in Postman
+
+- Go to the Headers tab.
+- Add this key-value pair:<br>
+Key: Authorization<br>
+Value: your_token (you can get the token after you successfully login)

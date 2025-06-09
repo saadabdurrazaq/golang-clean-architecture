@@ -58,3 +58,11 @@ func (r *ContactRepository) FilterContact(request *model.SearchContactRequest) f
 		return tx
 	}
 }
+
+func (r *ContactRepository) FindByUserIDs(db *gorm.DB, userIDs []string) ([]entity.Contact, error) {
+	var contacts []entity.Contact
+	if err := db.Where("user_id IN ?", userIDs).Find(&contacts).Error; err != nil {
+		return nil, err
+	}
+	return contacts, nil
+}

@@ -2,25 +2,27 @@ package usecase
 
 import (
 	"context"
-	"github.com/go-playground/validator/v10"
-	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"golang-clean-architecture/internal/entity"
 	"golang-clean-architecture/internal/gateway/messaging"
 	"golang-clean-architecture/internal/model"
 	"golang-clean-architecture/internal/model/converter"
 	"golang-clean-architecture/internal/repository"
+
+	"github.com/go-playground/validator/v10"
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
 type UserUseCase struct {
-	DB             *gorm.DB
-	Log            *logrus.Logger
-	Validate       *validator.Validate
-	UserRepository *repository.UserRepository
-	UserProducer   *messaging.UserProducer
+	DB                *gorm.DB
+	Log               *logrus.Logger
+	Validate          *validator.Validate
+	UserRepository    *repository.UserRepository
+	ContactRepository *repository.ContactRepository
+	UserProducer      *messaging.UserProducer
 }
 
 func NewUserUseCase(db *gorm.DB, logger *logrus.Logger, validate *validator.Validate,
@@ -32,6 +34,54 @@ func NewUserUseCase(db *gorm.DB, logger *logrus.Logger, validate *validator.Vali
 		UserRepository: userRepository,
 		UserProducer:   userProducer,
 	}
+}
+
+func (c *UserUseCase) Search(ctx context.Context, request *model.SearchUserRequest) ([]model.UserWithContactResponse, int64, error) {
+	tx := c.DB.WithContext(ctx).Begin()
+	defer tx.Rollback()
+
+	if err := c.Validate.Struct(request); err != nil {
+		c.Log.WithError(err).Error("error validating request body")
+		return nil, 0, fiber.ErrBadRequest
+	}
+
+	users, total, err := c.UserRepository.Search(tx, request)
+	if err != nil {
+		c.Log.WithError(err).Error("error getting users")
+		return nil, 0, fiber.ErrInternalServerError
+	}
+
+	// collect user IDs
+	userIDs := make([]string, len(users))
+	for i, u := range users {
+		userIDs[i] = u.ID
+	}
+
+	// fetch contacts in bulk
+	contacts, err := c.ContactRepository.FindByUserIDs(tx, userIDs)
+	if err != nil {
+		c.Log.WithError(err).Error("error fetching contacts")
+		return nil, 0, fiber.ErrInternalServerError
+	}
+
+	// group contacts by user ID
+	contactMap := make(map[string][]entity.Contact)
+	for _, c := range contacts {
+		contactMap[c.UserId] = append(contactMap[c.UserId], c)
+	}
+
+	// map users with their contacts
+	responses := make([]model.UserWithContactResponse, len(users))
+	for i, user := range users {
+		responses[i] = *converter.UserWithContactsToResponse(&user, contactMap[user.ID])
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		c.Log.WithError(err).Error("error committing tx")
+		return nil, 0, fiber.ErrInternalServerError
+	}
+
+	return responses, total, nil
 }
 
 func (c *UserUseCase) Verify(ctx context.Context, request *model.VerifyUserRequest) (*model.Auth, error) {
